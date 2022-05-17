@@ -16,7 +16,8 @@ Run arbitrary number of workers: `docker compose up --scale worker=5`
 # TODO
 [X] Most basic implementation possible of Worker, Source, and Machine
 [X] Source to read from disk
-[ ] Read from a dockerized volume (no consistency, tons of repeated work) with DiskSource
+[X] Read from a shared dockerized volume (no consistency, tons of repeated work) with DiskSource
+[ ] Verify that workers can alter disk and changes percolate 
 [ ] Consistent source reads from disk
 [ ] More interesting states
 [ ] Production logs instead of embarrassing print debug statements

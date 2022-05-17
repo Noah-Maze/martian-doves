@@ -2,6 +2,9 @@ from md_worker import SimpleWorker
 from work_source import SimpleSource, FileSource
 from os import environ
 
+
+worker_name = environ['HOSTNAME']
+
 # # Simple Worker
 # my_worker = SimpleWorker(SimpleSource())
 # my_worker.start()

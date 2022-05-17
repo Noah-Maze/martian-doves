@@ -3,8 +3,14 @@ version: '3.8'
 services:
  worker:
   image: python:3.6.1-alpine
-  volumes:
-    - ./:/app
   command: ["python", "/app/main.py"]
   environment:
-    - MD_SOURCE=/app/simpleStates
+    - MD_SOURCE=/stateFiles
+  volumes:
+     - ./:/app
+     - type: volume
+       source: states
+       target: /stateFiles
+
+volumes:
+  states:
