@@ -6,3 +6,5 @@ services:
   volumes:
     - ./:/app
   command: ["python", "/app/main.py"]
+  environment:
+    - MD_SOURCE=/app/simpleStates

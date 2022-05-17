@@ -1,0 +1,6 @@
+{
+    "state": "simple",
+    "payload": {
+        "target":       "Goodbye!"
+    }
+}
