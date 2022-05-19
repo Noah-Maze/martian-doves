@@ -1,85 +1,10 @@
 import pathlib
 import time
 import json
-import os
 from collections import namedtuple
 
-class SimpleMachine(object):
-    @classmethod
-    def FromJson(cls, name, payload):
-        return cls(name, payload['target'])
-    def ToJson(self):
-        state = {
-            "state": "simple",
-            "payload": {
-                "target": self.target
-            }
-        }
-        return json.dumps(state)
-    def __init__(self, name, target):
-        self.name = name
-        self.target = target
-        self.message = f" * From SimpleMachine: I am saying {target}"
-    def __str__(self):
-        return type(self).__name__ + f"({self.target})"
-    def tick(self):
-        print(self.message)
-        time.sleep(1)
-        # No follow up work (one, terminal state)
-        return None
-
-class CountdownMachine(object):
-    @classmethod
-    def FromJson(cls, name, payload):
-        return cls(name, payload['count'])
-    def ToJson(self):
-        state = {
-            "state": "countdown",
-            "payload": {
-                "count": self.count
-            }
-        }
-        return json.dumps(state)
-    def __init__(self, name, count):
-        self.name = name
-        self.count = count
-    def __str__(self):
-        return type(self).__name__ + f"({self.count})"
-    def tick(self):
-        self.count -= 1
-        print(f" * From CountdownMachine: Counting down! {self.count} remaining.")
-        time.sleep(1)
-        if self.count>0:
-            return CountdownMachine(self.name, self.count)
-        return None
-
-class SlowCountdownMachine(CountdownMachine):
-    ''' Intentionally run longer than the cycle_time to verify that
-        workers can miss an Assignment phase without incident
-    '''
-    @classmethod
-    def FromJson(cls, name, payload):
-        return cls(name, payload['count'])
-    def ToJson(self):
-        state = {
-            "state": "slow-countdown",
-            "payload": {
-                "count": self.count
-            }
-        }
-        return json.dumps(state)
-    def __init__(self, name, count):
-        self.name = name
-        self.count = count
-    def __str__(self):
-        return type(self).__name__ + f"({self.count})"
-    def tick(self):
-        self.count -= 1
-        print(f" * From SlowCountdownMachine: Counting down! {self.count} remaining.")
-        time.sleep(10)
-        if self.count>0:
-            return SlowCountdownMachine(self.name, self.count)
-        return None
+from example_machines import SimpleMachine, CountdownMachine, SlowCountdownMachine
+from md_utilities import try_create_directory, remove_flag, create_flag
 
 machines = {
     'simple': lambda name, payload: SimpleMachine.FromJson(name, payload),
@@ -102,53 +27,6 @@ def fetch_state(subdirectory, name):
     else:
         print(f"Warning!!! {state_path} contains an invalid state '{state_name}'.")
     return machine_state
-
-def try_create_directory(path):
-    try:
-        # Unfortunately this block is subject to a race condition
-        # so we need to catch the exception for the case where
-        # another node created it after we looked for it.
-        if not os.path.exists(path):
-            os.mkdir(path)
-    except FileExistsError:
-        # As long as /somebody/ creates it, we don't care.
-        pass
-
-def remove_flag(path):
-    # Remove in_progress flag
-    try:
-        os.remove(path)
-    except Exception as e:
-        print(f"Couldn't remove progress file at {path} (got {e})")
-
-def create_flag(path):
-    # Touch complete flag
-    with open(path,'a') as _:
-        pass
-
-class SimpleSource(object):
-    def __init__(self):
-        self.work = [ SimpleMachine("Machine 1", "Goodbye!"), SimpleMachine("Machine 2", "Hello.") ]
-        print(f"Initialized {self} with {len(self.work)} machine states.")
-        def __str__(self):
-            return type(self).__name__
-        time.sleep(1)
-    def __str__(self):
-        return type(self).__name__
-    def get_work(self, worker_name=None):
-        print(f"Delegating work, ({len(self.work)-1} jobs remaining).")
-        time.sleep(1)
-        return self.work.pop()
-    def has_work(self):
-        return len(self.work)>0
-    def save_result(self, worker_name, originating_state_name, new_state):
-        if new_state:
-            self.work.append(new_state)
-    # For backwards compatibility
-    def register_worker(self, worker_name):
-        pass
-    def commit_to_work(self, worker_name, state_machine_name):
-        pass
 
 class FileSource(object):
     def __init__(self, subdirectory):
@@ -180,35 +58,8 @@ class FileSource(object):
     def commit_to_work(self, worker_name, state_machine_name):
         pass
 
-
-class CommunicativeFileSource(FileSource):
-    ''' A file source with some writing to test out volume-based state sharing.
-        Not consistent at all, just a test!
-
-        Note: Inherits from FileSource
-    '''
-    def __init__(self, subdirectory):
-        super().__init__(subdirectory)
-        self.worker_path = subdirectory + '/workers'
-        try_create_directory(self.worker_path)
-
-    def get_work(self, worker_name=None):
-        if worker_name:
-            # Touch worker file
-            with open(f"{self.worker_path}/{worker_name}",'a') as _:
-                pass
-        # Generate list of workers
-        worker_files = list(pathlib.Path(f"{self.worker_path}/").glob('*'))
-        # Trim path down to worker name
-        workers = [wf.parts[-1] for wf in worker_files]
-        print(f"Delegating work, ({len(self.work)-1} jobs remaining, workers: {workers}).")
-        time.sleep(1)
-        return self.work.pop()
-    def has_work(self):
-        return len(self.work)>0
-
-
 Phase = namedtuple("Phase", "name start stop")
+
 class Phase(object):
     def __init__(self, name, start, stop, cycle_time):
         self.name = name
@@ -224,7 +75,7 @@ class Phase(object):
         sleep_time = self.start - cycle_t_now
         if sleep_time < 0:
             sleep_time += self.cycle_time
-        print(f"Waiting until {self.name} ({sleep_time:.2f} seconds remaining)...")
+        print(f"Waiting until {self.name} ({sleep_time:.2f} seconds remaining)...\n")
         time.sleep(sleep_time)
 
 class TemporalSemaphore(object):
@@ -289,7 +140,7 @@ def simple_work_assignment(workers, states):
           * State skew - a state called "zzzzz" will be worked on last if there
             are more states than workers.
 
-        TODO: This can be easily fixed by sorting by a hash salted with the hash of the system state.
+        This can be easily fixed by sorting by a hash salted with the hash of the system state.
     '''
     # Create tuples of worker, state pairs (truncates the longer of the two)
     assignments = zip(sorted(workers), sorted(states))

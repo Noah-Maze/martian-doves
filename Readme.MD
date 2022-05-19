@@ -1,4 +1,4 @@
-# Martian Doves: A simple distributed state-machine processor
+# Martian Doves: A simple, distributed state-machine processor
 
 This repository implements a program that can load state machines from disk, process them, and write them back to disk.  This program is capable of cooperating with multiple instances of itself to distribute work based on a temporal semaphore.  This semaphore allows the instances to work together without using a centralized component to assign work.
 
@@ -121,13 +121,3 @@ rm interestingStates/in_progress/*
 # remove later states created from initial states
 rm interestingStates/*.state-*
 ```
-
-# TODO
-* [X] Most basic implementation possible of Worker, Source, and Machine
-* [X] Source to read from disk
-* [X] Read from a shared dockerized volume (no consistency, tons of repeated work) with DiskSource
-* [X] Verify that workers can alter disk and changes percolate
-* [X] Consistent source reads from disk
-* [X] Mermaid diagrams in Readme for worker state and example states
-* [ ] Production logs instead of embarrassing print debug statements
-* [X] Finalize Readme
