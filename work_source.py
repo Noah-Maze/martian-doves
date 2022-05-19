@@ -19,7 +19,7 @@ class SimpleMachine(object):
     def __init__(self, name, target):
         self.name = name
         self.target = target
-        self.message = f"I am saying {target}"
+        self.message = f" * From SimpleMachine: I am saying {target}"
     def __str__(self):
         return type(self).__name__ + f"({self.target})"
     def tick(self):
@@ -28,9 +28,63 @@ class SimpleMachine(object):
         # No follow up work (one, terminal state)
         return None
 
+class CountdownMachine(object):
+    @classmethod
+    def FromJson(cls, name, payload):
+        return cls(name, payload['count'])
+    def ToJson(self):
+        state = {
+            "state": "countdown",
+            "payload": {
+                "count": self.count
+            }
+        }
+        return json.dumps(state)
+    def __init__(self, name, count):
+        self.name = name
+        self.count = count
+    def __str__(self):
+        return type(self).__name__ + f"({self.count})"
+    def tick(self):
+        self.count -= 1
+        print(f" * From CountdownMachine: Counting down! {self.count} remaining.")
+        time.sleep(1)
+        if self.count>0:
+            return CountdownMachine(self.name, self.count)
+        return None
+
+class SlowCountdownMachine(CountdownMachine):
+    ''' Intentionally run longer than the cycle_time to verify that
+        workers can miss an Assignment phase without incident
+    '''
+    @classmethod
+    def FromJson(cls, name, payload):
+        return cls(name, payload['count'])
+    def ToJson(self):
+        state = {
+            "state": "slow-countdown",
+            "payload": {
+                "count": self.count
+            }
+        }
+        return json.dumps(state)
+    def __init__(self, name, count):
+        self.name = name
+        self.count = count
+    def __str__(self):
+        return type(self).__name__ + f"({self.count})"
+    def tick(self):
+        self.count -= 1
+        print(f" * From SlowCountdownMachine: Counting down! {self.count} remaining.")
+        time.sleep(10)
+        if self.count>0:
+            return SlowCountdownMachine(self.name, self.count)
+        return None
 
 machines = {
-    'simple': lambda name, payload: SimpleMachine.FromJson(name, payload)
+    'simple': lambda name, payload: SimpleMachine.FromJson(name, payload),
+    'countdown': lambda name, payload: CountdownMachine.FromJson(name, payload),
+    'slow-countdown': lambda name, payload: SlowCountdownMachine.FromJson(name, payload)
 }
 
 def fetch_state(subdirectory, name):
@@ -46,7 +100,7 @@ def fetch_state(subdirectory, name):
         machine_state = machines[state_name](name, m_state['payload'])
         print(f"Loaded {state_path} and added a {machine_state}.")
     else:
-        print(f"Warning!!! {state_path} contains an invalid state '{machine_state}'.")
+        print(f"Warning!!! {state_path} contains an invalid state '{state_name}'.")
     return machine_state
 
 def try_create_directory(path):
@@ -170,7 +224,7 @@ class Phase(object):
         sleep_time = self.start - cycle_t_now
         if sleep_time < 0:
             sleep_time += self.cycle_time
-        print(f"Waiting until {self.name}... ({sleep_time:.2f} seconds remaining)")
+        print(f"Waiting until {self.name} ({sleep_time:.2f} seconds remaining)...")
         time.sleep(sleep_time)
 
 class TemporalSemaphore(object):
@@ -222,7 +276,7 @@ class TemporalSemaphore(object):
         return "Buffer"
     def wait_until(self, phase):
         now = self.current_cycle_time()
-        print(f"Waiting for {phase}, current phase is {self.current_phase()} (cycle time: {now:.2f})")
+        print(f"Current phase is {self.current_phase()} (cycle time: {now:.2f})")
         self.phases[phase].wait_until_active(now)
 
 def simple_work_assignment(workers, states):
@@ -248,7 +302,7 @@ def increment_state_name(state_name):
         # this might already have an incremented suffix, or it might just have a
         # hyphen in the name
         try:
-            new_increment = int(state_name[last_hyphen_location+1:])
+            new_increment = int(state_name[last_hyphen_location+1:])+1
             return state_name[:last_hyphen_location] + f"-{new_increment}"
         except ValueError:
             # Couldn't convert the rest of the string to an int
@@ -329,8 +383,8 @@ class SharedFileSource(object):
         available_workers = set([ worker_path.parts[-1] for worker_path in pathlib.Path(self.subdirectory+'/workers').glob('*')])
         return available_workers
     def _write_new_state(self, name, state):
-        with open(f"{self.subdirectory}/{name}") as f:
-            json.dump(state.ToJson(), f)
+        with open(f"{self.subdirectory}/{name}", 'w') as f:
+            f.write(state.ToJson())
     def _set_state(self, state_name, done=False, in_progress=False):
         if in_progress:
             # Touch in_progress flag

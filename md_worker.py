@@ -43,7 +43,7 @@ class OneAtATimeWorker(object):
         self.work_source.register_worker(self.worker_name)
         while self.work_source.has_work():
             # Get work
-            print(f"Retrieving initial work from {self.work_source}...")
+            print(f"Retrieving work from {self.work_source}...")
             machine = self.work_source.get_work(self.worker_name)
             if machine is None:
                 # We have more workers than work so this one can go down

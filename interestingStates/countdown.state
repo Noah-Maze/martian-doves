@@ -1,0 +1,6 @@
+{
+    "state": "countdown",
+    "payload": {
+        "count":       5
+    }
+}
