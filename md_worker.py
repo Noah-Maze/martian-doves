@@ -1,14 +1,22 @@
-
+import time
 
 class SimpleWorker(object):
-    def __init__(self, work_source):
+    def __init__(self, name, work_source):
+        print(f"Creating a SimpleWorker with a {work_source} at {time.time()%10000:2f}")
         self.work_source = work_source
+        self.worker_name = name
 
     def start(self):
+        self.work_source.register_worker(self.worker_name)
         while self.work_source.has_work():
             print(f"Retrieving initial work from {self.work_source}...")
             # Get Work shall block until work is available
-            machine = self.work_source.get_work()
+            machine = self.work_source.get_work(self.worker_name)
+            if machine is None:
+                # We have more workers than work so this one can go down
+                break
+            self.work_source.commit_to_work(self.worker_name, machine.name)
+            originating_state_name = machine.name
             while machine:
                 ''' Note to self: Multiple options here!
 
@@ -22,4 +30,29 @@ class SimpleWorker(object):
                     originated it.
                 '''
                 machine = machine.tick()
-        print("No more work to do!")
+            self.work_source.save_result(self.worker_name, originating_state_name, None)
+        print("No more work to do!\n\n")
+
+class OneAtATimeWorker(object):
+    def __init__(self, name, work_source):
+        print(f"Creating a OneAtATimeWorker with a {work_source} at {time.time()%10000:.2f}")
+        self.work_source = work_source
+        self.worker_name = name
+
+    def start(self):
+        self.work_source.register_worker(self.worker_name)
+        while self.work_source.has_work():
+            # Get work
+            print(f"Retrieving initial work from {self.work_source}...")
+            machine = self.work_source.get_work(self.worker_name)
+            if machine is None:
+                # We have more workers than work so this one can go down
+                break
+            # Commit to work
+            self.work_source.commit_to_work(self.worker_name, machine.name)
+            # Perform work
+            originating_state_name = machine.name
+            machine = machine.tick()
+            # Save the result
+            self.work_source.save_result(self.worker_name, originating_state_name, machine)
+        print("No more work to do!\n\n")
